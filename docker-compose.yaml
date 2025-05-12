@@ -1,0 +1,54 @@
+services:
+  subconverter: 
+    image: tindy2013/subconverter:latest
+    hostname: subconverter
+    container_name: subconverter
+    volumes:
+      - ./subconverter/all_base.tpl:/base/base/all_base.tpl
+      - ./subconverter/pref.toml:/base/pref.toml
+    ports:
+      - "25500:25500"
+
+  mihomo:
+    image: metacubex/mihomo:latest      # Clash.Meta 官方镜像
+    container_name: mihomo
+    restart: unless-stopped
+    ports:
+      - "7890:7890"   # HTTP 代理端口
+      - "7891:7891"   # SOCKS5 代理端口
+      - "9090:9090"   # 控制面板 API 端口
+    env_file:
+      - .env
+    volumes:
+      - ./init.sh:/init.sh
+      - ./config:/root/.config/mihomo
+    # 覆盖默认 entrypoint，先跑脚本再启动 clash
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        /init.sh && \
+        exec /mihomo -d /root/.config/mihomo
+
+  pac-server:
+    image: jinnlynn/genpac:latest
+    container_name: pac-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # 关键：指向你的本地 HTTP/HTTPS 代理
+      HTTP_PROXY: "http://host.docker.internal:7890"
+      HTTPS_PROXY: "http://host.docker.internal:7890"
+    env_file:
+      - .env
+    volumes:
+      - ./pac:/pac    # 本地挂载目录，用于持久化 proxy.pac
+      - ./pac.sh:/pac.sh
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        /pac.sh
+    ports:
+      - '8080:80'     # 宿主机 8080 映射到容器 80
+    restart: always
